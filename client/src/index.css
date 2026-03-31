@@ -1,0 +1,74 @@
+/* Full page container */
+.container {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  font-family: Arial, sans-serif;
+}
+
+/* Card UI */
+.card {
+  background: #fff;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  text-align: center;
+  width: 320px;
+}
+
+/* Title */
+.title {
+  margin-bottom: 20px;
+  color: #333;
+}
+
+/* Subtitle */
+.subtitle {
+  margin-bottom: 20px;
+  color: #555;
+}
+
+/* Welcome box */
+.welcome-box {
+  margin-bottom: 20px;
+  padding: 10px;
+  border-radius: 8px;
+  background-color: #f1f5ff;
+  color: #333;
+}
+
+/* Login Button */
+.login-btn {
+  padding: 12px 20px;
+  background-color: #0078d4;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: bold;
+  width: 100%;
+  transition: 0.3s;
+}
+
+.login-btn:hover {
+  background-color: #005fa3;
+}
+
+/* Logout Button */
+.logout-btn {
+  padding: 10px 20px;
+  background-color: #e63946;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: 0.3s;
+}
+
+.logout-btn:hover {
+  background-color: #c82333;
+}
