@@ -11,35 +11,43 @@ const messageRoutes = new Hono();
 messageRoutes.get("/:channelId", authMiddleware, async (c) => {
   try {
     const channelId = c.req.param("channelId");
-    const userId = (c as any).get("user").userId;
+    const userId = (c as any).get("user").userId.toString();
 
     // ✅ Get all messages
     const messages = await Message.find({ channelId })
       .populate("senderId", "name email")
       .sort({ createdAt: 1 });
 
-    // ✅ Get members
+    // ✅ Get channel members
     if(!channelId){
       return;
     }
     const members = await getChannelMembers(channelId);
 
-    // ✅ Admin list
+    // ✅ Admin list (FIXED)
     const admins = members
-      .filter((m: any) => m.role === "admin")
-      .map((m: any) =>
-        (m.userId as any)._id?.toString() || m.userId.toString()
+      .filter((m: any) => m.userId?.role === "Admin")
+      .map((m: any) => m.userId._id.toString());
+      
+    const isAdmin = admins.includes(userId);
+
+    // ✅ STEP 1: Filter messages (IMPORTANT)
+    const visibleMessages = messages.filter((msg: any) => {
+      const isSender = msg.senderId._id.toString() === userId;
+
+      const isMentioned = msg.mentions?.some(
+        (id: any) => id.toString() === userId
       );
 
-    const isAdmin = admins.includes(userId.toString());
+      return isAdmin || isSender || isMentioned;
+    });
 
-    // ✅ Filter messages per user
-    const filteredMessages = messages.map((msg: any) => {
+    // ✅ STEP 2: Apply mention text filtering
+    const filteredMessages = visibleMessages.map((msg: any) => {
       let filteredText = msg.text;
 
-      const isSender = msg.senderId._id.toString() === userId.toString();
+      const isSender = msg.senderId._id.toString() === userId;
 
-      // 🔥 Apply same logic as socket
       if (!isAdmin && !isSender) {
         msg.mentions.forEach((mentionId: string) => {
           const member = members.find(
@@ -49,11 +57,14 @@ messageRoutes.get("/:channelId", authMiddleware, async (c) => {
 
           if (!member) return;
 
-          const email = (member.userId as any).email;
+           const email = (member.userId as any).email;
 
           // ❗ remove other mentions
-          if (mentionId.toString() !== userId.toString()) {
-            filteredText = filteredText.replace(`@${email}`, "");
+          if (mentionId.toString() !== userId) {
+            filteredText = filteredText.replace(
+              new RegExp(`@${email}`, "g"),
+              ""
+            );
           }
         });
       }
@@ -67,60 +78,6 @@ messageRoutes.get("/:channelId", authMiddleware, async (c) => {
     return c.json({
       success: true,
       data: filteredMessages,
-    });
-  } catch (err) {
-    console.error("❌ Fetch messages error:", err);
-    return c.json({ error: "Failed to fetch messages" }, 500);
-  }
-});
-
-/**
- * ✅ Get Messages in Channel
- * GET /messages/:channelId
- */
-messageRoutes.get("/:channelId", authMiddleware, async (c) => {
-  try {
-    const channelId = c.req.param("channelId");
-    const userId = (c as any).get("user").userId;
-
-    // 🔥 get channel to check role
-    const channel = await Channel.findById(channelId);
-
-    if (!channel) {
-      return c.json({ error: "Channel not found" }, 404);
-    }
-
-    const member = channel.members.find(
-      (m: any) => m.userId.toString() === userId
-    );
-
-    if (!member) {
-      return c.json({ error: "Not part of channel" }, 403);
-    }
-
-    let messages;
-
-    // ✅ ADMIN → see all
-    if (member.role === "admin") {
-      messages = await Message.find({ channelId })
-        .populate("senderId", "name email")
-        .sort({ createdAt: 1 });
-    } else {
-      // ✅ MEMBER → only own + mentioned
-      messages = await Message.find({
-        channelId,
-        $or: [
-          { senderId: userId },      // own messages
-          { mentions: userId },      // tagged messages
-        ],
-      })
-        .populate("senderId", "name email")
-        .sort({ createdAt: 1 });
-    }
-
-    return c.json({
-      success: true,
-      data: messages,
     });
   } catch (err) {
     console.error("❌ Fetch messages error:", err);
@@ -219,7 +176,6 @@ messageRoutes.post("/upload", authMiddleware, async (c) => {
       fileType,
       fileName: file.name,
     });
-
   } catch (err) {
     console.error(err);
     return c.json({ error: "Upload failed" }, 500);

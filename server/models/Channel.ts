@@ -6,11 +6,6 @@ const memberSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
-  role: {
-    type: String,
-    enum: ["admin", "member"],
-    default: "member",
-  },
 });
 
 const channelSchema = new mongoose.Schema(

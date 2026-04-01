@@ -190,8 +190,8 @@ const Dashboard = ({ username, onLogout }: any) => {
       body: JSON.stringify({
         name: channelName,
         members: [
-          ...selectedUsers.map((id) => ({ userId: id, role: "member" })),
-          { userId, role: "admin" }, // creator = admin
+          ...selectedUsers.map((id) => ({ userId: id })),
+          { userId }, // creator
         ], // include self
       }),
     });
@@ -251,7 +251,11 @@ const Dashboard = ({ username, onLogout }: any) => {
           ))}
         </div>
         <div className="logout-btn-container">
-          {user?.role === "Admin" && <button onClick={() => setShowModal(true)}>➕ Create Channel</button>}
+          {user?.role === "Admin" && (
+            <button onClick={() => setShowModal(true)}>
+              ➕ Create Channel
+            </button>
+          )}
 
           <button className="logout-btn" onClick={onLogout}>
             Logout
