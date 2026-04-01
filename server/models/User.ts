@@ -8,7 +8,12 @@ const userSchema = new mongoose.Schema(
     name: { type: String },
     tenantId: { type: String },
     lastLogin: { type: Date },
-    channelId:[{ type: mongoose.Schema.Types.ObjectId, ref: "Channel" }]
+    channelId:[{ type: mongoose.Schema.Types.ObjectId, ref: "Channel" }],
+    role: {
+    type: String,
+    enum: ["Admin", "Member"],
+    default: "Member",
+  },
   },
   { timestamps: true }
 );

@@ -12,7 +12,7 @@ const clients: ClientMap = new Map();
 export const getChannelMembers = async (channelId: string) => {
   const channel = await Channel.findById(channelId).populate(
     "members.userId",
-    "email name"
+    "email name role",
   );
 
   if (!channel) return [];
@@ -66,7 +66,7 @@ export const websocketHandler = {
         // ✅ Populate sender info
         const populatedMsg = await newMessage.populate(
           "senderId",
-          "name email"
+          "name email",
         );
 
         // ✅ Get members with emails
@@ -74,8 +74,8 @@ export const websocketHandler = {
 
         // ✅ Admin list
         const admins = members
-          .filter((m: any) => m.role === "admin")
-          .map((m: any) => (m.userId as any)._id?.toString() || m.userId.toString());
+          .filter((m: any) => m.userId?.role === "Admin")
+          .map((m: any) => (m.userId as any)._id?.toString());
 
         // ✅ Recipients (admin + sender + mentioned users)
         let recipients = [...admins, senderId, ...mentions];
@@ -95,8 +95,7 @@ export const websocketHandler = {
           if (!isAdmin && !isSender) {
             mentions.forEach((mentionId: string) => {
               const member = members.find(
-                (m: any) =>
-                  m.userId._id.toString() === mentionId.toString()
+                (m: any) => m.userId._id.toString() === mentionId.toString(),
               );
 
               if (!member) return;
@@ -105,10 +104,7 @@ export const websocketHandler = {
 
               // ❗ hide other mentions
               if (mentionId.toString() !== id) {
-                filteredText = filteredText.replace(
-                  `@${email}`,
-                  ""
-                );
+                filteredText = filteredText.replace(`@${email}`, "");
               }
             });
           }
