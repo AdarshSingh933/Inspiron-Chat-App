@@ -32,7 +32,7 @@ const Dashboard = ({ onLogout }: any) => {
   useEffect(() => {
     if (!userId) return;
 
-    fetch(`http://localhost:3000/channel/${userId}`)
+    fetch(`${import.meta.env.VITE_API_URL}/channel/${userId}`)
       .then((res) => res.json())
       .then(setChannels);
   }, [userId]);
@@ -40,7 +40,7 @@ const Dashboard = ({ onLogout }: any) => {
   // ================= FETCH USERS (MODAL) =================
   useEffect(() => {
     if (showModal) {
-      fetch("http://localhost:3000/user/getAllUsers")
+      fetch(`${import.meta.env.VITE_API_URL}/user/getAllUsers`)
         .then((res) => res.json())
         .then((data) => setUsers(data.filter((u: any) => u._id !== userId)));
     }
@@ -53,7 +53,7 @@ const Dashboard = ({ onLogout }: any) => {
     const token = localStorage.getItem("appToken");
 
     axios
-      .get(`http://localhost:3000/message/${selectedChannel._id}`, {
+      .get(`${import.meta.env.VITE_API_URL}/message/${selectedChannel._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then((res) => setMessages(res.data.data));
@@ -63,7 +63,7 @@ const Dashboard = ({ onLogout }: any) => {
   useEffect(() => {
     if (!userId) return;
 
-    const ws = new WebSocket("ws://https://inspiron-chat-app.onrender.com/ws");
+    const ws = new WebSocket(`ws://${import.meta.env.VITE_API_URL}/ws`);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -125,7 +125,7 @@ const Dashboard = ({ onLogout }: any) => {
       const token = localStorage.getItem("appToken");
 
       const res = await axios.post(
-        "http://localhost:3000/message/upload",
+        `${import.meta.env.VITE_API_URL}/message/upload`,
         formData,
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -158,7 +158,7 @@ const Dashboard = ({ onLogout }: any) => {
     if (channelName.length < 3) {
       return;
     }
-    const res = await fetch("http://localhost:3000/channel", {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/channel`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -287,11 +287,11 @@ const Dashboard = ({ onLogout }: any) => {
                       <div className="mt-2">
                         {msg.fileType === "image" && (
                           <img
-                            src={`http://localhost:3000/${msg.fileUrl}`}
+                            src={`${import.meta.env.VITE_API_URL}/${msg.fileUrl}`}
                             className="w-40 rounded cursor-pointer hover:scale-105 transition"
                             onClick={() =>
                               setPreviewImage(
-                                `http://localhost:3000/${msg.fileUrl}`,
+                                `${import.meta.env.VITE_API_URL}/${msg.fileUrl}`,
                               )
                             }
                           />
@@ -299,7 +299,7 @@ const Dashboard = ({ onLogout }: any) => {
 
                         {msg.fileType === "video" && (
                           <video
-                            src={`http://localhost:3000/${msg.fileUrl}`}
+                            src={`${import.meta.env.VITE_API_URL}/${msg.fileUrl}`}
                             controls
                             className="w-60 rounded"
                           />
@@ -307,7 +307,7 @@ const Dashboard = ({ onLogout }: any) => {
 
                         {msg.fileType === "pdf" && (
                           <a
-                            href={`http://localhost:3000/${msg.fileUrl}`}
+                            href={`${import.meta.env.VITE_API_URL}/${msg.fileUrl}`}
                             target="_blank"
                             className="text-blue-600 underline"
                           >
@@ -317,7 +317,7 @@ const Dashboard = ({ onLogout }: any) => {
 
                         {msg.fileType === "doc" && (
                           <a
-                            href={`http://localhost:3000/${msg.fileUrl}`}
+                            href={`${import.meta.env.VITE_API_URL}/${msg.fileUrl}`}
                             target="_blank"
                             className="text-blue-600 underline"
                           >
