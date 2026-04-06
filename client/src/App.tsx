@@ -28,7 +28,7 @@ const handleRedirect = async () => {
         throw new Error("❌ ID Token not received");
       }
 
-      const res = await fetch("http://localhost:3000/auth/microsoft", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/microsoft`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
