@@ -63,7 +63,7 @@ const Dashboard = ({ onLogout }: any) => {
   useEffect(() => {
     if (!userId) return;
 
-    const ws = new WebSocket("ws://localhost:3000/ws");
+    const ws = new WebSocket("ws://https://inspiron-chat-app.vercel.app/ws");
     wsRef.current = ws;
 
     ws.onopen = () => {
