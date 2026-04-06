@@ -1,117 +1,77 @@
 import { useEffect, useRef, useState } from "react";
-import "./Dashboard.css";
 import axios from "axios";
+import "./Dashboard.css";
+import logo from "../../assets/inspiron-bg-white.png";
 
-interface Channel {
-  _id: string;
-  name: string;
-}
-
-interface Message {
-  senderId: {
-    _id: string;
-    name: string;
-    email: string;
-  };
-  text: string;
-  channelId: string;
-  mentions: string[];
-  fileUrl?: string;
-  fileType?: string;
-  fileName?: string;
-}
-
-const Dashboard = ({ username, onLogout }: any) => {
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+const Dashboard = ({ onLogout }: any) => {
+  const [channels, setChannels] = useState<any[]>([]);
+  const [selectedChannel, setSelectedChannel] = useState<any>(null);
+  const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // ✅ NEW STATES
   const [users, setUsers] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [channelName, setChannelName] = useState("");
+
   const [mentionQuery, setMentionQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [mentions, setMentions] = useState<string[]>([]);
-  const [selectedChannelUsers, setSelectedChannelUsers] = useState<any[]>([]);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-
-  console.log("selectedUsers", selectedUsers);
-
-  console.log("channels", channels);
+  const [channelUsers, setChannelUsers] = useState<any[]>([]);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const user = JSON.parse(localStorage.getItem("user") || "{}");
-  console.log("user", user);
   const userId = user?._id;
-  console.log("user", user, userId);
 
+  // ================= FETCH CHANNELS =================
   useEffect(() => {
     if (!userId) return;
 
     fetch(`http://localhost:3000/channel/${userId}`)
       .then((res) => res.json())
-      .then((data) => setChannels(data))
-      .catch((err) => console.error("Error fetching channels:", err));
+      .then(setChannels);
   }, [userId]);
 
+  // ================= FETCH USERS (MODAL) =================
   useEffect(() => {
     if (showModal) {
       fetch("http://localhost:3000/user/getAllUsers")
         .then((res) => res.json())
-        .then((data) => {
-          const filteredUsers = data.filter((u: any) => u._id !== userId);
-          setUsers(filteredUsers);
-        })
-        .catch((err) => console.error("Error fetching users:", err));
+        .then((data) => setUsers(data.filter((u: any) => u._id !== userId)));
     }
   }, [showModal]);
 
+  // ================= FETCH MESSAGES =================
   useEffect(() => {
-    const fetchMessages = async () => {
-      if (!selectedChannel?._id) return;
+    if (!selectedChannel) return;
 
-      try {
-        const token = localStorage.getItem("appToken"); // if using auth
+    const token = localStorage.getItem("appToken");
 
-        const res = await axios.get(
-          `http://localhost:3000/message/${selectedChannel._id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        );
-
-        setMessages(res.data.data); // ✅ load old messages
-      } catch (err) {
-        console.error("❌ Error fetching messages:", err);
-      }
-    };
-
-    fetchMessages();
+    axios
+      .get(`http://localhost:3000/message/${selectedChannel._id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((res) => setMessages(res.data.data));
   }, [selectedChannel]);
 
+  // ================= WEBSOCKET =================
   useEffect(() => {
     if (!userId) return;
+
     const ws = new WebSocket("ws://localhost:3000/ws");
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("🟢 WS Connected");
       ws.send(JSON.stringify({ type: "JOIN", userId }));
     };
 
-    ws.onclose = () => {
-      console.log("🔴 WS Closed");
-    };
-
-    ws.onerror = (err) => {
-      console.error("❌ WS Error:", err);
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
       if (data.type === "RECEIVE_MESSAGE") {
         setMessages((prev) => [...prev, data.message]);
       }
@@ -120,7 +80,36 @@ const Dashboard = ({ username, onLogout }: any) => {
     return () => ws.close();
   }, [userId]);
 
-  // ✅ Send message
+  // ================= SELECT CHANNEL =================
+  const handleChannelClick = (ch: any) => {
+    setSelectedChannel(ch);
+
+    const members = ch.members
+      ?.filter((m: any) => m.userId._id !== userId)
+      .map((m: any) => ({
+        _id: m.userId._id,
+        email: m.userId.email,
+      }));
+
+    setChannelUsers(members || []);
+  };
+
+  // ================= MENTION =================
+  const handleChange = (e: any) => {
+    const value = e.target.value;
+    setInput(value);
+
+    const lastWord = value.split(" ").pop();
+
+    if (lastWord.startsWith("@")) {
+      setMentionQuery(lastWord.slice(1));
+      setShowSuggestions(true);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  // ================= SEND =================
   const handleSend = async () => {
     if (!selectedChannel) return;
 
@@ -128,32 +117,24 @@ const Dashboard = ({ username, onLogout }: any) => {
     let fileType = "";
     let fileName = "";
 
-    // ✅ Step 1: Upload file (if exists)
     if (selectedFile) {
       const formData = new FormData();
       formData.append("file", selectedFile);
-      formData.append("channelId", selectedChannel._id); // ✅ FIX
-      // ❌ DO NOT send senderId (already in JWT)
+      formData.append("channelId", selectedChannel._id);
 
       const token = localStorage.getItem("appToken");
 
       const res = await axios.post(
         "http://localhost:3000/message/upload",
         formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
-      // ⚠️ FIX: your backend returns { data: message }
       fileUrl = res.data.fileUrl;
       fileType = res.data.fileType;
       fileName = res.data.fileName;
     }
 
-    // ✅ Step 2: Send via WebSocket
     wsRef.current?.send(
       JSON.stringify({
         type: "SEND_MESSAGE",
@@ -172,299 +153,349 @@ const Dashboard = ({ username, onLogout }: any) => {
     setSelectedFile(null);
   };
 
-  // ✅ Create Channel
+  // ================= CREATE CHANNEL =================
   const createChannel = async () => {
-    if (!channelName.trim()) {
-      alert("Channel name is required");
+    if (channelName.length < 3) {
       return;
     }
-
-    if (selectedUsers.length === 0) {
-      alert("Select at least one user");
-      return;
-    }
-
     const res = await fetch("http://localhost:3000/channel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: channelName,
-        members: [
-          ...selectedUsers.map((id) => ({ userId: id })),
-          { userId }, // creator
-        ], // include self
+        members: [...selectedUsers.map((id) => ({ userId: id })), { userId }],
       }),
     });
 
     const data = await res.json();
-
     setChannels((prev) => [...prev, data]);
 
-    // reset modal
     setShowModal(false);
     setSelectedUsers([]);
     setChannelName("");
   };
 
-  const handleChange = (e: any) => {
-    const value = e.target.value;
-    setInput(value);
-
-    const lastWord = value.split(" ").pop();
-
-    if (lastWord.startsWith("@")) {
-      setMentionQuery(lastWord.substring(1));
-      setShowSuggestions(true);
-    } else {
-      setShowSuggestions(false);
-    }
+  const handleCancelChannel = () => {
+    setShowModal(false);
   };
 
-  const handleChannelClick = (ch: any) => {
-    setSelectedChannel(ch);
-    const filterUser = ch.members
-      .filter((member: any) => member.userId._id !== userId)
-      .map((member: any) => ({
-        _id: member.userId._id,
-        email: member.userId.email,
-      }));
-    setSelectedChannelUsers(filterUser);
+  const iconMap: Record<string, string> = {
+    "HR Connect": "diversity_3",
+    "Culture Connect": "favorite",
+    "Finance Connect": "payments",
   };
+
+  const iconFor = (name: string) => iconMap[name];
 
   return (
-    <div className="dashboard">
-      {/* Sidebar */}
-      <div className="sidebar">
-        <div className="user-name-container">
-          <h2>{user.name}</h2>
-          <h3>Chat</h3>
+    <div className="flex h-screen bg-gray-100 text-gray-800 dashboard-page">
+      {/* SIDEBAR */}
+      <div className="w-72 bg-white border-r border-gray-200 p-6 flex flex-col">
+        {/* LOGO */}
+        <div className="flex items-center gap-3 mb-8">
+          <img src={logo} alt="Inspiron Logo" className="w-30 h-10 rounded" />
         </div>
-        <div className="channel-list">
-          {channels?.map((ch) => (
+
+        {/* CHANNELS */}
+        <div className="flex-1 overflow-y-auto space-y-2 fade-scroll">
+          {channels.map((ch) => (
             <div
               key={ch._id}
-              className="user"
               onClick={() => handleChannelClick(ch)}
+              className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition ${
+                selectedChannel?._id === ch._id
+                  ? "bg-blue-100 text-blue-700"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
             >
-              # {ch.name}
+              <span className="material-symbols-outlined text-green-500">
+                {iconFor(ch.name)}
+              </span>
+              <span>{ch.name}</span>
             </div>
           ))}
         </div>
-        <div className="logout-btn-container">
-          {user?.role === "Admin" && (
-            <button onClick={() => setShowModal(true)}>
-              ➕ Create Channel
-            </button>
-          )}
 
-          <button className="logout-btn" onClick={onLogout}>
+        {/* CREATE CHANNEL */}
+        {user?.role === "Admin" && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="mt-3 bg-blue-500 text-white p-2 rounded"
+          >
+            + Create Channel
+          </button>
+        )}
+
+        {/* USER */}
+        <div className="mt-6 border-t border-gray-200 pt-4">
+          <div className="flex items-center gap-3 bg-gray-100 p-3 rounded-lg">
+            <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center">
+              {user.name?.[0]}
+            </div>
+            <div className="text-sm">{user.name}</div>
+          </div>
+
+          <button
+            onClick={onLogout}
+            className="mt-3 w-full bg-red-500 text-white p-2 rounded"
+          >
             Logout
           </button>
         </div>
       </div>
 
-      {/* Chat Area */}
-      <div className="chat-area">
-        {selectedChannel ? (
-          <>
-            <div className="chat-header">💬 {selectedChannel.name}</div>
+      {/* MAIN */}
+      <div className="flex-1 flex flex-col">
+        {/* HEADER */}
+        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-white">
+          <h1 className="text-lg font-bold">
+            {selectedChannel ? selectedChannel.name : "Select Channel"}
+          </h1>
+        </div>
 
-            <div className="chat-messages">
-              {messages.map((msg: any, i) => (
-                <div
-                  key={i}
-                  className={`message ${
-                    msg.senderId._id === userId ? "sent" : "received"
-                  }`}
-                >
-                  {/* 👇 Username */}
-                  <div className="sender-name">{msg.senderId.name}</div>
+        {/* MESSAGES */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 fade-scroll bg-gray-50">
+          {messages.map((msg, i) => {
+            const isMe = msg.senderId._id === userId;
 
-                  {/* 👇 Message */}
-                  <div>{msg.text}</div>
-                  {msg.fileUrl && (
-                    <div>
-                      {/* 🖼 Image */}
-                      {msg.fileType === "image" && (
-                        <img
-                          src={`http://localhost:3000/${msg.fileUrl}`}
-                          width="200"
-                        />
-                      )}
+            return (
+              <div
+                key={i}
+                className={`flex gap-3 ${isMe ? "justify-end" : ""}`}
+              >
+                {!isMe && (
+                  <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
+                    {msg.senderId.name[0]}
+                  </div>
+                )}
 
-                      {/* 🎥 Video */}
-                      {msg.fileType === "video" && (
-                        <video
-                          src={`http://localhost:3000/${msg.fileUrl}`}
-                          controls
-                          width="250"
-                        />
-                      )}
+                <div className={`max-w-xl ${isMe ? "text-right" : ""}`}>
+                  <div className="text-xs text-gray-500">
+                    {msg.senderId.name}
+                  </div>
 
-                      {/* 📄 PDF */}
-                      {msg.fileType === "pdf" && (
-                        <a
-                          href={`http://localhost:3000/${msg.fileUrl}`}
-                          target="_blank"
-                        >
-                          📄 Open PDF
-                        </a>
-                      )}
+                  <div
+                    className={`mt-1 p-3 rounded-2xl ${
+                      isMe
+                        ? "bg-green-500 text-white"
+                        : "bg-white border border-gray-200"
+                    }`}
+                  >
+                    {msg.text}
 
-                      {/* 📎 Other Docs */}
-                      {msg.fileType === "doc" && (
-                        <a
-                          href={`http://localhost:3000/${msg.fileUrl}`}
-                          target="_blank"
-                        >
-                          📎 Download File
-                        </a>
-                      )}
-                    </div>
-                  )}
+                    {msg.fileUrl && (
+                      <div className="mt-2">
+                        {msg.fileType === "image" && (
+                          <img
+                            src={`http://localhost:3000/${msg.fileUrl}`}
+                            className="w-40 rounded cursor-pointer hover:scale-105 transition"
+                            onClick={() =>
+                              setPreviewImage(
+                                `http://localhost:3000/${msg.fileUrl}`,
+                              )
+                            }
+                          />
+                        )}
+
+                        {msg.fileType === "video" && (
+                          <video
+                            src={`http://localhost:3000/${msg.fileUrl}`}
+                            controls
+                            className="w-60 rounded"
+                          />
+                        )}
+
+                        {msg.fileType === "pdf" && (
+                          <a
+                            href={`http://localhost:3000/${msg.fileUrl}`}
+                            target="_blank"
+                            className="text-blue-600 underline"
+                          >
+                            📄 Open PDF
+                          </a>
+                        )}
+
+                        {msg.fileType === "doc" && (
+                          <a
+                            href={`http://localhost:3000/${msg.fileUrl}`}
+                            target="_blank"
+                            className="text-blue-600 underline"
+                          >
+                            📎 Download File
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* INPUT */}
+        <div className="p-6 border-t border-gray-200 relative bg-white">
+          {/* MENTION */}
+          {showSuggestions && (
+            <div className="absolute bottom-24 left-6 bg-white border border-gray-300 rounded-lg w-64 shadow-lg z-10">
+              {channelUsers
+                .filter((u) =>
+                  u.email.toLowerCase().includes(mentionQuery.toLowerCase()),
+                )
+                .map((u) => (
+                  <div
+                    key={u._id}
+                    className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                    onClick={() => {
+                      setInput((prev) => prev.replace(/@\w*$/, `@${u.email} `));
+                      setMentions((prev) =>
+                        prev.includes(u._id) ? prev : [...prev, u._id],
+                      );
+                      setShowSuggestions(false);
+                    }}
+                  >
+                    {u.email}
+                  </div>
+                ))}
+            </div>
+          )}
+
+          {/* FILE PREVIEW */}
+          {selectedFile && (
+            <div className="mb-3 flex items-center gap-3 bg-gray-100 p-2 rounded-lg w-fit">
+              <span
+                className="text-red-500 cursor-pointer"
+                onClick={() => {
+                  setSelectedFile(null);
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = "";
+                  }
+                }}
+              >
+                ❌
+              </span>
+
+              {selectedFile.type.startsWith("image") && (
+                <img
+                  src={URL.createObjectURL(selectedFile)}
+                  className="w-16 h-16 object-cover rounded"
+                />
+              )}
+
+              {selectedFile.type.startsWith("video") && (
+                <video controls className="w-32 rounded">
+                  <source src={URL.createObjectURL(selectedFile)} />
+                </video>
+              )}
+
+              {!selectedFile.type.startsWith("image") &&
+                !selectedFile.type.startsWith("video") && (
+                  <span className="text-sm text-gray-600">
+                    📄 {selectedFile.name}
+                  </span>
+                )}
+            </div>
+          )}
+
+          {/* INPUT BOX */}
+          <div className="bg-gray-100 rounded-2xl p-3 flex items-center gap-2">
+            <input
+              value={input}
+              onChange={handleChange}
+              placeholder="Type message... (@mention)"
+              className="flex-1 bg-transparent outline-none text-gray-800 px-2"
+            />
+
+            <label className="material-symbols-outlined text-gray-500 cursor-pointer">
+              add_circle
+              <input
+                type="file"
+                hidden
+                ref={fileInputRef}
+                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              />
+            </label>
+
+            <span className="material-symbols-outlined text-gray-500 cursor-pointer">
+              mood
+            </span>
+
+            <button
+              onClick={handleSend}
+              className="bg-green-500 text-white px-4 py-2 rounded-xl flex items-center gap-1"
+            >
+              Send
+              <span className="material-symbols-outlined text-sm">send</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* MODAL */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/30 flex justify-center items-center">
+          <div className="bg-white p-6 rounded w-80 shadow-lg">
+            <input
+              placeholder="Channel name"
+              value={channelName}
+              onChange={(e) => setChannelName(e.target.value)}
+              className="w-full p-2 bg-gray-100 border border-gray-300 rounded"
+            />
+
+            <div className="user-list mt-2">
+              {users.map((u) => (
+                <label key={u._id} className="block text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    className="mr-2"
+                    onChange={(e) => {
+                      if (e.target.checked)
+                        setSelectedUsers((prev) => [...prev, u._id]);
+                      else
+                        setSelectedUsers((prev) =>
+                          prev.filter((id) => id !== u._id),
+                        );
+                    }}
+                  />
+                  {u.email}
+                </label>
               ))}
             </div>
 
-            <div className="chat-input">
-              {/* 🔥 Mention Suggestions */}
-              {showSuggestions && (
-                <div className="mention-box">
-                  {selectedChannelUsers
-                    .filter((u) =>
-                      u.email
-                        .toLowerCase()
-                        .includes(mentionQuery.toLowerCase()),
-                    )
-                    .map((u) => (
-                      <div
-                        key={u._id}
-                        className="mention-item"
-                        onClick={() => {
-                          setInput((prev) =>
-                            prev.replace(/@\w*$/, `@${u.email} `),
-                          );
-                          setMentions((prev) =>
-                            prev.includes(u._id) ? prev : [...prev, u._id],
-                          );
-                          setShowSuggestions(false);
-                        }}
-                      >
-                        {u.email}
-                      </div>
-                    ))}
-                </div>
-              )}
-
-              {/* ✅ Input */}
-
-              <div className="chat-input-container">
-                {/* ✍️ Text Input */}
-                {selectedFile && (
-                  <div className="file-preview">
-                    {/* ❌ Remove button */}
-                    <span
-                      className="remove-file"
-                      onClick={() => setSelectedFile(null)}
-                    >
-                      ❌
-                    </span>
-
-                    {/* 📸 Image preview */}
-                    {selectedFile.type.startsWith("image") && (
-                      <img
-                        src={URL.createObjectURL(selectedFile)}
-                        alt="preview"
-                        className="preview-img"
-                      />
-                    )}
-
-                    {/* 🎥 Video preview */}
-                    {selectedFile.type.startsWith("video") && (
-                      <video
-                        src={URL.createObjectURL(selectedFile)}
-                        controls
-                        className="preview-video"
-                      />
-                    )}
-
-                    {/* 📄 Other files */}
-                    {!selectedFile.type.startsWith("image") &&
-                      !selectedFile.type.startsWith("video") && (
-                        <div className="preview-doc">
-                          📄 {selectedFile.name}
-                        </div>
-                      )}
-                  </div>
-                )}
-                <div className="input-box">
-                  <input
-                    value={input}
-                    onChange={handleChange}
-                    placeholder="Type message... (@mention)"
-                    className="text-input"
-                  />
-                  <label className="file-btn">
-                    📎
-                    <input
-                      type="file"
-                      hidden
-                      onChange={(e) =>
-                        setSelectedFile(e.target.files?.[0] || null)
-                      }
-                    />
-                  </label>
-
-                  {/* 🚀 Send */}
-                  <button onClick={handleSend}>Send</button>
-                </div>
-              </div>
+            <div className="mdoal-btn-container">
+              <button
+                onClick={createChannel}
+                className="bg-green-500 text-white w-full mt-2 p-2 rounded"
+              >
+                Create
+              </button>
+              <button
+                onClick={handleCancelChannel}
+                className="bg-red-500 text-white w-full mt-2 p-2 rounded"
+              >
+                Cancel
+              </button>
             </div>
-          </>
-        ) : (
-          <div className="no-chat">Select a channel</div>
-        )}
-      </div>
-
-      {/* Modal for creating channel */}
-      {showModal && (
-        <div className="modal">
-          <h3>Create Channel</h3>
-
-          {/* ✅ Channel Name Input */}
-          <input
-            type="text"
-            placeholder="Enter channel name"
-            value={channelName}
-            onChange={(e) => setChannelName(e.target.value)}
-            className="channel-input"
-          />
-
-          <h4>Select Users</h4>
-
-          <div className="user-list">
-            {users.map((u) => (
-              <label key={u._id} className="user-row">
-                <input
-                  type="checkbox"
-                  checked={selectedUsers.includes(u._id)}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedUsers((prev) => [...prev, u._id]);
-                    } else {
-                      setSelectedUsers((prev) =>
-                        prev.filter((id) => id !== u._id),
-                      );
-                    }
-                  }}
-                />
-                {u.email}
-              </label>
-            ))}
           </div>
+        </div>
+      )}
+      {/* ✅ IMAGE FULL VIEW MODAL */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+          onClick={() => setPreviewImage(null)}
+        >
+          {/* ❌ CLOSE BUTTON */}
+          <span className="absolute top-6 right-6 text-white text-2xl cursor-pointer">
+            ✖
+          </span>
 
-          <button onClick={createChannel}>Create Channel</button>
-          <button onClick={() => setShowModal(false)}>Cancel</button>
+          {/* IMAGE */}
+          <img
+            src={previewImage}
+            className="max-h-[90%] max-w-[90%] rounded-lg shadow-lg"
+            onClick={(e) => e.stopPropagation()} // prevent closing when clicking image
+          />
         </div>
       )}
     </div>
