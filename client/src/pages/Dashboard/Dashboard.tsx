@@ -62,8 +62,11 @@ const Dashboard = ({ onLogout }: any) => {
   // ================= WEBSOCKET =================
   useEffect(() => {
     if (!userId) return;
-
-    const ws = new WebSocket(`ws://${import.meta.env.VITE_API_URL}/ws`);
+    const WS_URL =
+      window.location.hostname === "localhost"
+        ? "ws://localhost:3000/ws"
+        : "wss://inspiron-chat-app.onrender.com/ws";
+    const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
 
     ws.onopen = () => {
