@@ -57,14 +57,15 @@ messageRoutes.get("/:channelId", authMiddleware, async (c) => {
 
           if (!member) return;
 
-           const email = (member.userId as any).email;
+          const mentionedUser = member.userId as any;
+          const mentionTag =
+            mentionedUser.name && mentionedUser.email
+              ? `${mentionedUser.name}- ${mentionedUser.email}`
+              : mentionedUser.name || mentionedUser.email;
 
           // ❗ remove other mentions
           if (mentionId.toString() !== userId) {
-            filteredText = filteredText.replace(
-              new RegExp(`@${email}`, "g"),
-              ""
-            );
+            filteredText = filteredText.replace(`@${mentionTag}`, "");
           }
         });
       }

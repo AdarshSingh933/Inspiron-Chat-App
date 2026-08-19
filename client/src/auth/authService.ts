@@ -35,5 +35,9 @@ export const getAccessToken = async (msalInstance:any) => {
 };
 
 export const logout = async (msalInstance:any) => {
-  await msalInstance.logoutRedirect();
+  localStorage.removeItem("appToken");
+  localStorage.removeItem("user");
+  await msalInstance.logoutRedirect({
+    postLogoutRedirectUri: window.location.origin,
+  });
 };

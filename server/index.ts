@@ -10,6 +10,7 @@ import { websocketHandler } from "./websocket/websocket";
 import userRoutes from "./routes/user";
 import channelRoutes from "./routes/channel";
 import { serveStatic } from "hono/bun";
+import { addPreranaToInitialChannels } from "./utils/channelMembers";
 
 const PORT = process.env.PORT || 3000;
 
@@ -35,6 +36,7 @@ app.route("/channel", channelRoutes);
 app.use("/uploads/*", serveStatic({ root: "./" }));
 
 await connectDB();
+await addPreranaToInitialChannels();
 
 const server = serve({
   port: Number(PORT),

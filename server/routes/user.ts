@@ -4,10 +4,10 @@ import Channel from "../models/Channel";
 
 const userRoutes = new Hono();
 
-// ✅ Get all users (only id + email)
+// ✅ Get all users (id + name + email + role)
 userRoutes.get("/getAllUsers", async (c) => {
   try {
-    const users = await User.find({}, "_id email");
+    const users = await User.find({}, "_id name email role");
     return c.json(users);
   } catch (err) {
     console.error("❌ Error fetching users:", err);
@@ -29,7 +29,7 @@ userRoutes.get("/getAllUsers/:channelId", async (c) => {
 
     const users = await User.find(
       { _id: { $in: userIds } },
-      "_id email"
+      "_id name email role"
     );
 
     return c.json(users);

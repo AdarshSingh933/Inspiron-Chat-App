@@ -100,11 +100,15 @@ export const websocketHandler = {
 
               if (!member) return;
 
-              const email = (member.userId as any).email;
+              const mentionedUser = member.userId as any;
+              const mentionTag =
+                mentionedUser.name && mentionedUser.email
+                  ? `${mentionedUser.name}- ${mentionedUser.email}`
+                  : mentionedUser.name || mentionedUser.email;
 
               // ❗ hide other mentions
               if (mentionId.toString() !== id) {
-                filteredText = filteredText.replace(`@${email}`, "");
+                filteredText = filteredText.replace(`@${mentionTag}`, "");
               }
             });
           }
