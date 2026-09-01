@@ -52,6 +52,11 @@ export const websocketHandler = {
           fileName,
         } = data;
 
+        const trimmedText = typeof text === "string" ? text.trim() : "";
+        if (!trimmedText && !fileUrl) {
+          return;
+        }
+
         // ✅ Save message
         const newMessage = await Message.create({
           senderId,
