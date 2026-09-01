@@ -15,7 +15,6 @@ const clearStoredUser = () => {
 
 function App() {
   const { instance } = useMsal();
-  const account = instance.getActiveAccount() || instance.getAllAccounts()[0];
   const [appUser, setAppUser] = useState<any>(null);
   const [authReady, setAuthReady] = useState(false);
 
@@ -29,14 +28,12 @@ function App() {
       const idToken = tokenResponse.idToken;
 
       if (!idToken) {
-        throw new Error("❌ ID Token not received");
+        throw new Error("ID Token not received");
       }
 
       const res = await fetch(`${API_BASE_URL}/auth/microsoft`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: idToken }),
       });
 
@@ -72,7 +69,7 @@ function App() {
         instance.setActiveAccount(activeAccount);
         await syncBackendUser(activeAccount);
       } catch (err) {
-        console.error("❌ Redirect handling error:", err);
+        console.error("Redirect handling error:", err);
         clearStoredUser();
         setAppUser(null);
       } finally {
@@ -100,6 +97,8 @@ function App() {
   if (!authReady) {
     return null;
   }
+
+  const account = instance.getActiveAccount() || instance.getAllAccounts()[0];
 
   if (account && appUser) {
     return <Dashboard currentUser={appUser} onLogout={handleLogout} />;

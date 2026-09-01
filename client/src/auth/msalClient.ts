@@ -12,7 +12,7 @@ const msalConfig: Configuration = {
     postLogoutRedirectUri:  import.meta.env.VITE_REDIRECT_URI,
   },
   cache: {
-    cacheLocation: "sessionStorage",
+    cacheLocation: "localStorage",
   },
    system: {	
         loggerOptions: {	

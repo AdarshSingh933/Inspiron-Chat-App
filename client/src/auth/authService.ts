@@ -1,20 +1,19 @@
 
 import { loginRequest } from "./authConfig";
+
 export const loginWithAzure = async (msalInstance: any, email?: string) => {
   try {
-     await msalInstance.loginRedirect({
+    await msalInstance.loginRedirect({
       ...loginRequest,
       loginHint: email,
-      prompt: "select_account",
     });
-  
   } catch (error) {
-    console.log("error in login",error);
+    console.log("error in login", error);
     throw error;
   }
-}
+};
 
-export const getAccessToken = async (msalInstance:any) => {
+export const getAccessToken = async (msalInstance: any) => {
   try {
     const account = msalInstance.getActiveAccount();
 
@@ -34,7 +33,7 @@ export const getAccessToken = async (msalInstance:any) => {
   }
 };
 
-export const logout = async (msalInstance:any) => {
+export const logout = async (msalInstance: any) => {
   localStorage.removeItem("appToken");
   localStorage.removeItem("user");
   await msalInstance.logoutRedirect({
