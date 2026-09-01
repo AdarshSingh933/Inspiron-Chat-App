@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import React, { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import axios from "axios";
 import "./Dashboard.css";
 import logo from "../../assets/inspiron-bg-white.png";
@@ -17,11 +17,128 @@ const DEFAULT_CHANNEL_MEMBER_EMAIL = "prerana.k@inspironlabs.com";
 const getMentionLabel = (user: any) => user.name || user.email;
 
 const getMentionTag = (user: any) => {
-  if (user?.name && user?.email) {
-    return `${user.name}- ${user.email}`;
+  return user?.name || user?.email || "";
+};
+
+const getUserInitials = (name?: string, email?: string) => {
+  if (name) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  }
+  if (email) {
+    return email.slice(0, 2).toUpperCase();
+  }
+  return "U";
+};
+
+const getTeamsAvatarBg = (id?: string, name?: string) => {
+  const bgClasses = [
+    "bg-[#22c55e]", // Original Green
+    "bg-[#16a34a]", // Dark Green
+    "bg-[#10b981]", // Emerald
+    "bg-[#059669]", // Deep Emerald
+    "bg-[#14b8a6]", // Teal Green
+    "bg-[#15803d]", // Forest Green
+  ];
+  const str = id || name || "default";
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return bgClasses[Math.abs(hash) % bgClasses.length];
+};
+
+const formatTeamsTimestamp = (dateStr?: string) => {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
+
+  const now = new Date();
+  const isToday =
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear();
+
+  const timeStr = date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  if (isToday) {
+    return timeStr;
   }
 
-  return user?.name || user?.email || "";
+  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${timeStr}`;
+};
+
+const renderFormattedMessageText = (text: string) => {
+  if (!text) return null;
+
+  const lines = text.split("\n");
+
+  return lines.map((line, lineIdx) => {
+    const tokens: React.ReactNode[] = [];
+    let lastIdx = 0;
+
+    const combinedRegex = /(https?:\/\/[^\s]+|@[A-Za-z0-9._\s]+?-\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|@[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|@[A-Z][a-zA-Z0-9._-]*(?:\s+[A-Z][a-zA-Z0-9._-]*)*|@[a-zA-Z0-9._-]+)/g;
+
+    let match: RegExpExecArray | null;
+    while ((match = combinedRegex.exec(line)) !== null) {
+      if (match.index > lastIdx) {
+        tokens.push(line.substring(lastIdx, match.index));
+      }
+
+      const tokenStr = match[0];
+
+      if (tokenStr.startsWith("http://") || tokenStr.startsWith("https://")) {
+        tokens.push(
+          <a
+            key={`${lineIdx}-${match.index}`}
+            href={tokenStr}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#16a34a] underline hover:text-[#15803d] font-medium break-all"
+          >
+            {tokenStr}
+          </a>
+        );
+      } else if (tokenStr.startsWith("@")) {
+        let displayName = tokenStr;
+        if (displayName.includes("- ")) {
+          displayName = displayName.split("- ")[0];
+        }
+        tokens.push(
+          <span
+            key={`${lineIdx}-${match.index}`}
+            className="inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded text-[13px] font-semibold bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] shadow-2xs hover:bg-[#BBF7D0] transition cursor-pointer select-none"
+            title={tokenStr}
+          >
+            <span className="text-[#22c55e] mr-0.5 font-bold">@</span>
+            {displayName.replace(/^@/, "")}
+          </span>
+        );
+      } else {
+        tokens.push(tokenStr);
+      }
+
+      lastIdx = combinedRegex.lastIndex;
+    }
+
+    if (lastIdx < line.length) {
+      tokens.push(line.substring(lastIdx));
+    }
+
+    return (
+      <React.Fragment key={lineIdx}>
+        {lineIdx > 0 && <br />}
+        {tokens}
+      </React.Fragment>
+    );
+  });
 };
 
 const EMOJI_LIST = [
@@ -478,6 +595,8 @@ const Dashboard = ({ onLogout, currentUser }: any) => {
   // ================= SEND =================
   const handleSend = async () => {
     if (!selectedChannel) return;
+    const trimmedText = input.trim();
+    if (!trimmedText && !selectedFile) return;
 
     let fileUrl = "";
     let fileType = "";
@@ -506,7 +625,7 @@ const Dashboard = ({ onLogout, currentUser }: any) => {
         type: "SEND_MESSAGE",
         senderId: userId,
         channelId: selectedChannel._id,
-        text: input,
+        text: trimmedText,
         mentions,
         fileUrl,
         fileType,
@@ -584,11 +703,11 @@ const Dashboard = ({ onLogout, currentUser }: any) => {
                 onClick={() => handleChannelClick(ch)}
                 className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition ${
                   selectedChannel?._id === ch._id
-                    ? "bg-blue-100 text-blue-700"
+                    ? "bg-[#DCFCE7] text-[#15803D] font-semibold"
                     : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
-                <span className="material-symbols-outlined text-green-500">
+                <span className="material-symbols-outlined text-[#22c55e]">
                   {iconFor(ch.name)}
                 </span>
                 <span>{ch.name}</span>
@@ -614,7 +733,7 @@ const Dashboard = ({ onLogout, currentUser }: any) => {
         {user?.role === "Admin" && (
           <button
             onClick={() => setShowModal(true)}
-            className="mt-3 bg-blue-500 text-white p-2 rounded"
+            className="mt-3 bg-[#22c55e] hover:bg-[#16a34a] text-white p-2 rounded-lg font-medium text-sm transition shadow-2xs w-full"
           >
             + Create Channel
           </button>
@@ -623,10 +742,17 @@ const Dashboard = ({ onLogout, currentUser }: any) => {
         {/* USER */}
         <div className="mt-6 border-t border-gray-200 pt-4">
           <div className="flex items-center gap-3 bg-gray-100 p-3 rounded-lg">
-            <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center">
-              {user.name?.[0]}
+            <div
+              className={`w-8 h-8 ${getTeamsAvatarBg(
+                userId,
+                user?.name,
+              )} text-white rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0`}
+            >
+              {getUserInitials(user?.name, user?.email)}
             </div>
-            <div className="text-sm">{user.name}</div>
+            <div className="text-sm font-medium text-gray-800 truncate">
+              {user?.name || user?.email}
+            </div>
           </div>
 
           <button
@@ -736,84 +862,151 @@ const Dashboard = ({ onLogout, currentUser }: any) => {
 
         {/* MESSAGES */}
         {selectedChannel ? (
-        <div className="flex-1 min-w-0 overflow-y-auto pt-6 pb-6 pl-[30px] pr-[30px] space-y-6 message-scroll bg-gray-50">
-          {messages.map((msg, i) => {
-            const isMe = msg.senderId._id === userId;
+          <div className="flex-1 min-w-0 overflow-y-auto pt-6 pb-6 pl-[30px] pr-[30px] space-y-4 message-scroll bg-[#F5F5F5]">
+            {messages.map((msg, i) => {
+              const isMe = msg.senderId?._id === userId;
+              const senderName =
+                msg.senderId?.name || msg.senderId?.email || "Unknown User";
+              const initials = getUserInitials(
+                msg.senderId?.name,
+                msg.senderId?.email,
+              );
+              const avatarBg = getTeamsAvatarBg(msg.senderId?._id, senderName);
+              const timestamp = formatTeamsTimestamp(msg.createdAt);
 
-            return (
-              <div
-                key={i}
-                className={`flex gap-3 ${isMe ? "justify-end" : ""}`}
-              >
-                {!isMe && (
-                  <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                    {msg.senderId.name[0]}
-                  </div>
-                )}
+              return (
+                <div
+                  key={msg._id || i}
+                  className={`flex gap-3 group/msg ${
+                    isMe ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  {/* Avatar for received messages */}
+                  {!isMe && (
+                    <div
+                      className={`w-9 h-9 ${avatarBg} text-white rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 shadow-2xs mt-0.5`}
+                      title={senderName}
+                    >
+                      {initials}
+                    </div>
+                  )}
 
-                <div className={`max-w-xl break-words ${isMe ? "text-right" : ""}`}>
-                  <div className="text-xs text-gray-500">
-                    {msg.senderId.name}
-                  </div>
-
+                  {/* Message content block */}
                   <div
-                    className={`mt-1 p-3 rounded-2xl ${
-                      isMe
-                        ? "bg-green-500 text-white"
-                        : "bg-white border border-gray-200"
+                    className={`max-w-[75%] break-words flex flex-col ${
+                      isMe ? "items-end" : "items-start"
                     }`}
                   >
-                    {msg.text}
+                    {/* Header: Sender Name & Timestamp */}
+                    <div
+                      className={`flex items-center gap-2 mb-1 px-0.5 text-xs ${
+                        isMe ? "flex-row-reverse" : "flex-row"
+                      }`}
+                    >
+                      <span className="font-semibold text-[#242424] hover:underline cursor-pointer">
+                        {isMe ? "You" : senderName}
+                      </span>
+                      {timestamp && (
+                        <span className="text-[11px] text-gray-500 font-normal">
+                          {timestamp}
+                        </span>
+                      )}
+                    </div>
 
-                    {msg.fileUrl && (
-                      <div className="mt-2">
-                        {msg.fileType === "image" && (
-                          <img
-                            src={`${API_BASE_URL}/${msg.fileUrl}`}
-                            className="w-40 rounded cursor-pointer hover:scale-105 transition"
-                            onClick={() =>
-                              setPreviewImage(
-                                `${API_BASE_URL}/${msg.fileUrl}`,
-                              )
-                            }
-                          />
-                        )}
+                    {/* Bubble Card with Teams styling */}
+                    <div className="relative group/bubble">
+                      <div
+                        className={`p-3.5 rounded-lg text-[14px] leading-relaxed shadow-2xs border ${
+                          isMe
+                            ? "bg-[#DCFCE7] text-[#11100F] border-[#86EFAC]"
+                            : "bg-white text-[#11100F] border-[#E1DFDD]"
+                        }`}
+                      >
+                        {renderFormattedMessageText(msg.text)}
 
-                        {msg.fileType === "video" && (
-                          <video
-                            src={`${API_BASE_URL}/${msg.fileUrl}`}
-                            controls
-                            className="w-60 rounded"
-                          />
-                        )}
+                        {msg.fileUrl && (
+                          <div className="mt-2.5 pt-2 border-t border-gray-200/60">
+                            {msg.fileType === "image" && (
+                              <img
+                                src={`${API_BASE_URL}/${msg.fileUrl}`}
+                                className="w-56 max-h-60 object-cover rounded-lg cursor-pointer hover:opacity-95 transition border border-gray-200"
+                                onClick={() =>
+                                  setPreviewImage(
+                                    `${API_BASE_URL}/${msg.fileUrl}`,
+                                  )
+                                }
+                              />
+                            )}
 
-                        {msg.fileType === "pdf" && (
-                          <a
-                            href={`${API_BASE_URL}/${msg.fileUrl}`}
-                            target="_blank"
-                            className="text-blue-600 underline"
-                          >
-                            📄 Open PDF
-                          </a>
-                        )}
+                            {msg.fileType === "video" && (
+                              <video
+                                src={`${API_BASE_URL}/${msg.fileUrl}`}
+                                controls
+                                className="w-64 rounded-lg border border-gray-200"
+                              />
+                            )}
 
-                        {msg.fileType === "doc" && (
-                          <a
-                            href={`${API_BASE_URL}/${msg.fileUrl}`}
-                            target="_blank"
-                            className="text-blue-600 underline"
-                          >
-                            📎 Download File
-                          </a>
+                            {msg.fileType === "pdf" && (
+                              <a
+                                href={`${API_BASE_URL}/${msg.fileUrl}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-md text-xs font-semibold text-[#16a34a] hover:underline shadow-2xs"
+                              >
+                                📄 {msg.fileName || "Open PDF"}
+                              </a>
+                            )}
+
+                            {msg.fileType === "doc" && (
+                              <a
+                                href={`${API_BASE_URL}/${msg.fileUrl}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-md text-xs font-semibold text-[#16a34a] hover:underline shadow-2xs"
+                              >
+                                📎 {msg.fileName || "Download File"}
+                              </a>
+                            )}
+                          </div>
                         )}
                       </div>
-                    )}
+
+                      {/* Teams floating quick reaction bar on hover */}
+                      <div
+                        className={`absolute -top-3 ${
+                          isMe ? "left-2" : "right-2"
+                        } hidden group-hover/bubble:flex items-center gap-1 bg-white border border-gray-200 rounded-full px-2 py-0.5 shadow-md z-10 text-xs transition-all`}
+                      >
+                        {["👍", "❤️", "😂", "😮", "👏"].map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            className="hover:scale-125 transition-transform p-0.5"
+                            onClick={() => {
+                              setInput((prev) => `${prev} ${emoji}`);
+                            }}
+                            title={`React with ${emoji}`}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
+
+                  {/* Avatar for sent messages */}
+                  {isMe && (
+                    <div
+                      className={`w-9 h-9 ${avatarBg} text-white rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 shadow-2xs mt-0.5`}
+                      title={senderName}
+                    >
+                      {initials}
+                    </div>
+                  )}
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
         ) : (
           <div className="flex-1 min-w-0 flex items-center justify-center bg-gray-50 px-[30px]">
             {channelsLoaded && (
@@ -835,142 +1028,183 @@ const Dashboard = ({ onLogout, currentUser }: any) => {
 
         {/* INPUT */}
         {selectedChannel && (
-        <div className="px-[30px] py-6 border-t border-gray-200 relative bg-white">
-          {/* MENTION */}
-          {showSuggestions && (
-            <div className="absolute bottom-24 left-[30px] bg-white border border-gray-300 rounded-lg min-w-[320px] max-w-[420px] shadow-lg z-10">
-              {channelUsers
-                .filter((u) =>
-                  `${u.name || ""} ${u.email}`
-                    .toLowerCase()
-                    .includes(mentionQuery.toLowerCase()),
-                )
-                .map((u) => (
-                  <div
-                    key={u._id}
-                    className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
-                    onClick={() => {
-                      setInput((prev) =>
-                        prev.replace(/@[^\s]*$/, `@${getMentionTag(u)} `),
-                      );
-                      setMentions((prev) =>
-                        prev.includes(u._id) ? prev : [...prev, u._id],
-                      );
-                      setShowSuggestions(false);
-                    }}
-                  >
-                    <div className="font-medium text-gray-800">
-                      {getMentionLabel(u)}
-                    </div>
-                    <div className="text-xs text-gray-500">{u.email}</div>
-                  </div>
-                ))}
-            </div>
-          )}
-
-          {/* FILE PREVIEW */}
-          {selectedFile && (
-            <div className="mb-3 flex items-center gap-3 bg-gray-100 p-2 rounded-lg w-fit">
-              <span
-                className="text-red-500 cursor-pointer"
-                onClick={() => {
-                  setSelectedFile(null);
-                  if (fileInputRef.current) {
-                    fileInputRef.current.value = "";
-                  }
-                }}
-              >
-                ❌
-              </span>
-
-              {selectedFile.type.startsWith("image") && (
-                <img
-                  src={URL.createObjectURL(selectedFile)}
-                  className="w-16 h-16 object-cover rounded"
-                />
-              )}
-
-              {selectedFile.type.startsWith("video") && (
-                <video controls className="w-32 rounded">
-                  <source src={URL.createObjectURL(selectedFile)} />
-                </video>
-              )}
-
-              {!selectedFile.type.startsWith("image") &&
-                !selectedFile.type.startsWith("video") && (
-                  <span className="text-sm text-gray-600">
-                    📄 {selectedFile.name}
-                  </span>
-                )}
-            </div>
-          )}
-
-          {/* INPUT BOX */}
-          <div className="bg-gray-100 rounded-2xl p-3 flex items-center gap-2">
-            <input
-              value={input}
-              onChange={handleChange}
-              placeholder="Type message... (@mention)"
-              className="flex-1 bg-transparent outline-none text-gray-800 px-2"
-            />
-
-            <label className="material-symbols-outlined text-gray-500 cursor-pointer">
-              add_circle
-              <input
-                type="file"
-                hidden
-                ref={fileInputRef}
-                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-              />
-            </label>
-
-            <div className="relative" ref={emojiPickerRef}>
-              <span
-                className="material-symbols-outlined text-gray-500 cursor-pointer emoji-trigger"
-                onClick={() => {
-                  setShowEmojiPicker((prev) => !prev);
-                  setShowSuggestions(false);
-                }}
-              >
-                mood
-              </span>
-
-              {showEmojiPicker && (
-                <div className="emoji-picker">
-                  <div className="emoji-picker-header">Emoji</div>
-                  <input
-                    value={emojiQuery}
-                    onChange={(e) => setEmojiQuery(e.target.value)}
-                    placeholder="Find something fun"
-                    className="emoji-picker-search"
-                  />
-                  <div className="emoji-picker-grid">
-                    {EMOJI_LIST.filter((emoji) =>
-                      emojiQuery ? emoji.includes(emojiQuery) : true,
-                    ).map((emoji, index) => (
-                      <button
-                        key={`${emoji}-${index}`}
-                        type="button"
-                        className="emoji-picker-item"
-                        onClick={() => insertEmoji(emoji)}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
+          <div className="px-[30px] py-4 border-t border-gray-200 relative bg-white">
+            {/* MENTION SUGGESTIONS */}
+            {showSuggestions && (
+              <div className="absolute bottom-20 left-[30px] bg-white border border-gray-200 rounded-lg min-w-[320px] max-w-[420px] shadow-xl z-20 overflow-hidden">
+                <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-[#16a34a] uppercase tracking-wider">
+                  Suggested People
                 </div>
-              )}
-            </div>
+                <div className="max-h-60 overflow-y-auto">
+                  {channelUsers
+                    .filter((u) =>
+                      `${u.name || ""} ${u.email}`
+                        .toLowerCase()
+                        .includes(mentionQuery.toLowerCase()),
+                    )
+                    .map((u) => {
+                      const uInitials = getUserInitials(u.name, u.email);
+                      const uBg = getTeamsAvatarBg(u._id, u.name || u.email);
+                      return (
+                        <div
+                          key={u._id}
+                          className="px-3 py-2.5 hover:bg-[#DCFCE7] hover:text-[#15803D] cursor-pointer flex items-center gap-3 transition"
+                          onClick={() => {
+                            setInput((prev) =>
+                              prev.replace(/@[^\s]*$/, `@${getMentionTag(u)} `),
+                            );
+                            setMentions((prev) =>
+                              prev.includes(u._id) ? prev : [...prev, u._id],
+                            );
+                            setShowSuggestions(false);
+                          }}
+                        >
+                          <div
+                            className={`w-7 h-7 ${uBg} text-white rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0`}
+                          >
+                            {uInitials}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-sm text-[#242424] truncate">
+                              {getMentionLabel(u)}
+                            </div>
+                            <div className="text-xs text-gray-500 truncate">
+                              {u.email}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
 
-            <button
-              onClick={handleSend}
-              className="bg-green-500 text-white px-4 py-2 rounded-xl flex items-center gap-1"
-            >
-              Send
-              <span className="material-symbols-outlined text-sm">send</span>
-            </button>
+            {/* FILE PREVIEW */}
+            {selectedFile && (
+              <div className="mb-3 flex items-center gap-3 bg-gray-100 p-2 rounded-lg w-fit">
+                <span
+                  className="text-red-500 cursor-pointer"
+                  onClick={() => {
+                    setSelectedFile(null);
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = "";
+                    }
+                  }}
+                >
+                  ❌
+                </span>
+
+                {selectedFile.type.startsWith("image") && (
+                  <img
+                    src={URL.createObjectURL(selectedFile)}
+                    className="w-16 h-16 object-cover rounded"
+                  />
+                )}
+
+                {selectedFile.type.startsWith("video") && (
+                  <video controls className="w-32 rounded">
+                    <source src={URL.createObjectURL(selectedFile)} />
+                  </video>
+                )}
+
+                {!selectedFile.type.startsWith("image") &&
+                  !selectedFile.type.startsWith("video") && (
+                    <span className="text-sm text-gray-600">
+                      📄 {selectedFile.name}
+                    </span>
+                  )}
+              </div>
+            )}
+
+            {/* INPUT BOX */}
+            {(() => {
+              const canSend = Boolean(input.trim() || selectedFile);
+              return (
+                <div className="bg-white border border-gray-300 rounded-lg p-2.5 shadow-xs focus-within:border-[#22c55e] focus-within:ring-1 focus-within:ring-[#22c55e] flex items-center gap-2 transition">
+                  <input
+                    value={input}
+                    onChange={handleChange}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        if (canSend) {
+                          handleSend();
+                        }
+                      }
+                    }}
+                    placeholder="Type a message... (use @ to mention someone)"
+                    className="flex-1 bg-transparent outline-none text-[#11100F] placeholder-gray-400 px-2 text-sm"
+                  />
+
+                  <label
+                    className="material-symbols-outlined text-gray-500 hover:text-[#22c55e] cursor-pointer p-1 rounded hover:bg-gray-100 transition"
+                    title="Attach file"
+                  >
+                    attach_file
+                    <input
+                      type="file"
+                      hidden
+                      ref={fileInputRef}
+                      onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                    />
+                  </label>
+
+                  <div className="relative" ref={emojiPickerRef}>
+                    <span
+                      className="material-symbols-outlined text-gray-500 hover:text-[#22c55e] cursor-pointer p-1 rounded hover:bg-gray-100 transition emoji-trigger"
+                      onClick={() => {
+                        setShowEmojiPicker((prev) => !prev);
+                        setShowSuggestions(false);
+                      }}
+                      title="Add emoji"
+                    >
+                      mood
+                    </span>
+
+                    {showEmojiPicker && (
+                      <div className="emoji-picker">
+                        <div className="emoji-picker-header">Emoji</div>
+                        <input
+                          value={emojiQuery}
+                          onChange={(e) => setEmojiQuery(e.target.value)}
+                          placeholder="Find something fun"
+                          className="emoji-picker-search"
+                        />
+                        <div className="emoji-picker-grid">
+                          {EMOJI_LIST.filter((emoji) =>
+                            emojiQuery ? emoji.includes(emojiQuery) : true,
+                          ).map((emoji, index) => (
+                            <button
+                              key={`${emoji}-${index}`}
+                              type="button"
+                              className="emoji-picker-item"
+                              onClick={() => insertEmoji(emoji)}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSend}
+                    disabled={!canSend}
+                    className={`px-4 py-1.5 rounded-md font-semibold text-sm flex items-center gap-1.5 shadow-2xs transition ${
+                      canSend
+                        ? "bg-[#22c55e] hover:bg-[#16a34a] text-white cursor-pointer active:scale-95"
+                        : "bg-gray-200 text-gray-400 cursor-not-allowed opacity-60"
+                    }`}
+                  >
+                    Send
+                    <span className="material-symbols-outlined text-sm">send</span>
+                  </button>
+                </div>
+              );
+            })()}
           </div>
-        </div>
         )}
       </div>
 
@@ -1005,16 +1239,16 @@ const Dashboard = ({ onLogout, currentUser }: any) => {
               ))}
             </div>
 
-            <div className="mdoal-btn-container">
+            <div className="mdoal-btn-container mt-4">
               <button
                 onClick={createChannel}
-                className="bg-green-500 text-white w-full mt-2 p-2 rounded"
+                className="bg-[#22c55e] hover:bg-[#16a34a] text-white font-medium w-full p-2 rounded-lg transition"
               >
                 Create
               </button>
               <button
                 onClick={handleCancelChannel}
-                className="bg-red-500 text-white w-full mt-2 p-2 rounded"
+                className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium w-full p-2 rounded-lg transition"
               >
                 Cancel
               </button>
